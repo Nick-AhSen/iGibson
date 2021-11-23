@@ -12,7 +12,8 @@ from PIL import Image
 
 from igibson.scenes.scene_base import Scene
 from igibson.utils.utils import l2_distance
-
+import matplotlib.pyplot as plt
+import copy
 
 class IndoorScene(with_metaclass(ABCMeta, Scene)):
     """
@@ -70,6 +71,7 @@ class IndoorScene(with_metaclass(ABCMeta, Scene)):
             return
 
         self.floor_map = []
+        self.ped_floor_map = [] # Possible start and goal position to sample from for humans.
         self.floor_graph = []
         for floor in range(len(self.floor_heights)):
             if self.trav_map_type == "with_obj":
@@ -85,14 +87,58 @@ class IndoorScene(with_metaclass(ABCMeta, Scene)):
                 self.trav_map_size = int(
                     self.trav_map_original_size * self.trav_map_default_resolution / self.trav_map_resolution
                 )
+                
             trav_map[obstacle_map == 0] = 0
             trav_map = cv2.resize(trav_map, (self.trav_map_size, self.trav_map_size))
             trav_map = cv2.erode(trav_map, np.ones((self.trav_map_erosion, self.trav_map_erosion)))
-            trav_map[trav_map < 255] = 0
 
+            # plt.figure()
+            # plt.imshow(trav_map)
+            # plt.show()  
+
+            trav_map[trav_map < 255] = 0
+            
             if self.build_graph:
                 self.build_trav_graph(maps_path, floor, trav_map)
+
+            # plt.figure()
+            # plt.imshow(trav_map)
+            # plt.show()
+
+            # Extract all corners
+            # dst = cv2.cornerHarris(trav_map,5,3,0.04)
+            # ret, dst = cv2.threshold(dst,0.1*dst.max(),255,0)
+            # dst = np.uint8(dst)
+            # ret, labels, stats, centroids = cv2.connectedComponentsWithStats(dst)
+            # criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
+            # corners = cv2.cornerSubPix(trav_map,np.float32(centroids),(5,5),(-1,-1),criteria)
+            # for i in range(1, len(corners)):
+            #     print("corners is ", corners[i])
+            #img[dst>0.1*dst.max()]=[0,0,255]
+            #cv2.imshow('image', img)
+            #cv2.waitKey(0)
+            #cv2.destroyAllWindows
+
+            #trav_map[:,:] = 0
+            self.ped_trav_map = copy.deepcopy(trav_map)
+            self.ped_trav_map[:,:] = 0
+            self.addEllipse(self.ped_trav_map, 323, 40, 6, 10)
+            self.addEllipse(self.ped_trav_map, 323, 210, 6, 10)
+            self.addEllipse(self.ped_trav_map, 410, 125, 10, 6)
+            self.addEllipse(self.ped_trav_map, 240, 125, 10, 6)
+            self.addEllipse(self.ped_trav_map, 323, 125, 8, 8)
+
+            # plt.figure()
+            # plt.imshow(self.ped_trav_map)
+            # plt.show()
+
             self.floor_map.append(trav_map)
+
+    def addEllipse(self, map, x0, y0, a, b):
+         x = np.arange(self.trav_map_size)
+         y = np.arange(self.trav_map_size)[:,None]
+         ellipse = ((x-x0)/a)**2 + ((y-y0)/b)**2 <= 1
+         map[ellipse] = 255
 
     # TODO: refactor into C++ for speedup
     def build_trav_graph(self, maps_path, floor, trav_map):
@@ -113,6 +159,7 @@ class IndoorScene(with_metaclass(ABCMeta, Scene)):
         else:
             logging.info("Building traversable graph")
             g = nx.Graph()
+            #logging.info("trav map size = ", self.trav_map_size)
             for i in range(self.trav_map_size):
                 for j in range(self.trav_map_size):
                     if trav_map[i, j] == 0:
@@ -129,10 +176,25 @@ class IndoorScene(with_metaclass(ABCMeta, Scene)):
                             g.add_edge(n, (i, j), weight=l2_distance(n, (i, j)))
 
             # only take the largest connected component
-            largest_cc = max(nx.connected_components(g), key=len)
+            largest_cc = min(nx.connected_components(g), key=len)
             g = g.subgraph(largest_cc).copy()
             with open(graph_file, "wb") as pfile:
                 pickle.dump(g, pfile)
+
+            # s = [g.subgraph(c).copy() for c in nx.connected_components(g)]
+            # for i, g in enumerate(s):
+            #     graph_file = os.path.join(
+            #         maps_path, "floor_trav_{}_py{}{}_{}.p".format(floor, sys.version_info.major, sys.version_info.minor,i)
+            #     )
+            #     with open(graph_file, "wb") as pfile:
+            #         pickle.dump(g, pfile)
+            #     trav_map[:, :] = 0
+            #     for node in g.nodes:
+            #         trav_map[node[0], node[1]] = 255
+            #     plt.figure()
+            #     plt.imshow(trav_map)
+            #     plt.show()
+
 
         self.floor_graph.append(g)
 
@@ -155,6 +217,8 @@ class IndoorScene(with_metaclass(ABCMeta, Scene)):
         trav_space = np.where(trav == 255)
         idx = np.random.randint(0, high=trav_space[0].shape[0])
         xy_map = np.array([trav_space[0][idx], trav_space[1][idx]])
+        
+        #print('xy_map = ',xy_map)
         x, y = self.map_to_world(xy_map)
         z = self.floor_heights[floor]
         return floor, np.array([x, y, z])

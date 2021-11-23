@@ -19,6 +19,7 @@ from igibson.tasks.interactive_nav_random_task import InteractiveNavRandomTask
 from igibson.tasks.point_nav_fixed_task import PointNavFixedTask
 from igibson.tasks.point_nav_random_task import PointNavRandomTask
 from igibson.tasks.reaching_random_task import ReachingRandomTask
+from igibson.tasks.social_nav_random_task import SocialNavRandomTask
 from igibson.tasks.room_rearrangement_task import RoomRearrangementTask
 from igibson.utils.constants import MAX_CLASS_COUNT, MAX_INSTANCE_COUNT
 from igibson.utils.utils import quatToXYZW
@@ -95,6 +96,8 @@ class iGibsonEnv(BaseEnv):
             self.task = ReachingRandomTask(self)
         elif self.config["task"] == "room_rearrangement":
             self.task = RoomRearrangementTask(self)
+        elif self.config["task"] == "social_nav_random":
+            self.task = SocialNavRandomTask(self)
         else:
             self.task = None
 

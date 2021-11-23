@@ -162,6 +162,8 @@ setup(
         "six",
         "pandas",
         "packaging",
+        "Cython",
+        "pyrvo2 @ https://github.com/sybrenstuvel/Python-RVO2/archive/master.zip" 
     ],
     ext_modules=[CMakeExtension("MeshRendererContext", sourcedir="igibson/render")],
     cmdclass=dict(build_ext=CMakeBuild),
